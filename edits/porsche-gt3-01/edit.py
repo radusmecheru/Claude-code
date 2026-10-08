@@ -22,21 +22,22 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'tools'))
-from carfx import camera, ease, hex_bgr, neon_layer, trace_light  # noqa: E402
+from carfx import camera, hex_bgr, neon_layer, trace_light  # noqa: E402
 
 FPS = 60
 W, H = 1080, 1920
 BLUE = hex_bgr('#2A8CFF')
 # Bass hits measured on the sound (seconds).
 HITS = [5.383, 6.56, 7.883, 9.217, 10.70, 11.90, 13.22, 14.55, 16.04, 17.23, 18.66, 19.04, 19.89, 20.32, 21.37]
-END = 21.95
+# v3: 13.6 s cut ending on the 13.22 hit; one picture per frame (no cut-out over another shot).
+END = 13.62
 SEGMENTS = {  # name: (start, end) in song time
     's1': (0.0, 5.383), 's2': (5.383, 7.883), 's3': (7.883, 9.217), 's4': (9.217, 10.70),
-    's5': (10.70, 16.05), 's6': (16.05, 18.66), 's7': (18.66, END),
+    's5': (10.70, END),
 }
 C1_MASK_T0, C2_MASK_T0 = 3.0, 0.0
 MASK_FILES = {'c1': 'c1_mask_full.npy', 'c2': 'c2_mask.npy'}
-OUT_NAME = 'porsche_gt3_edit02'
+OUT_NAME = 'porsche_gt3_edit03'
 
 D = None  # work dir, set in main
 
@@ -199,32 +200,16 @@ def s2(out, t0, n):
 
 
 def s3(out, t0, n):
-    """Neon cut-out of the rear (c1) drops in over the tilting front shot (c2)."""
-    bg = c2(2.5, n)
-    fg = c1(10.0, n)
-    s = 0.62
-    for i, (b, f) in enumerate(zip(bg, fg)):
+    """The tilting front shot continues; the car itself flashes neon on the 7.88 hit."""
+    frames = c2(2.5, n)
+    for i, f in enumerate(frames):
         t = t0 + i / FPS
-        ct = 10.0 + i / FPS
-        m = mask('c1', ct, (1920, 1080))
-        inten = 0.9 + 0.6 * hit_env(t, 6)
-        lit, al = neon_layer(f, m, BLUE, intensity=inten)
-        x0, y0, x1, y1 = car_box('c1', ct)
-        ccx, ccy = (x0 + x1) / 2, (y0 + y1) / 2
-        p = ease(i / 16)
-        tx = W / 2
-        ty = -450 + (430 + 450) * p + math.sin(i / 20) * 6
-        # Downscale with area filtering first (sharp, no aliasing), then translate into place.
-        lit_s = cv2.resize(lit, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
-        al_s = cv2.resize(al, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
-        M = np.float32([[1, 0, tx - ccx * s], [0, 1, ty - ccy * s]])
-        lay = cv2.warpAffine(lit_s, M, (W, H), flags=cv2.INTER_LINEAR)
-        a = cv2.warpAffine(al_s, M, (W, H), flags=cv2.INTER_LINEAR)
-        base = b.astype(np.float32)
-        sh = cv2.GaussianBlur(a, (0, 0), 28)[..., None] * 0.55
-        base *= 1 - sh
-        a = a[..., None]
-        img = lay * a + base * (1 - a)
+        img = f.astype(np.float32)
+        e = hit_env(t, 4)
+        if e > 0.03:
+            lit, al = neon_layer(f, mask('c2', 2.5 + i / FPS, (W, H)), BLUE, intensity=0.4 + 1.1 * e)
+            a = al[..., None] * min(1.0, e * 1.6)
+            img = lit * a + img * (1 - a)
         out.write(punch(img, t, strength=0.05, shake_px=6))
 
 
@@ -246,8 +231,8 @@ def s4(out, t0, n):
 
 
 def s5(out, t0, n):
-    """Orbit around the rear, full-screen: wheel/side framing on 11.9, whip + tail-light framing on 13.22,
-    neon flash + light lap on 14.55."""
+    """Orbit around the rear, full-screen; reframe on the wheel at 11.9; on the 13.22 hit: neon + white
+    flash, then fade to black."""
     frames = c1(8.6, n)
     for i, f in enumerate(frames):
         t = t0 + i / FPS
@@ -256,66 +241,19 @@ def s5(out, t0, n):
         m = mask('c1', ct, (1920, 1080))
         if t < 11.90:
             img, mm = vert(f, car_cx(ct, 0.08), m=m)
-        elif t < 13.22:
+        else:
             # Reframe on the rear wheel and flank (no mirroring: it would flip the plate and lettering).
             img, mm = vert(f, x0 + 0.30 * (x1 - x0), zoom=1.05, cy=y0 + 0.62 * (y1 - y0), m=m)
-        else:
-            # Tighter framing on the tail-light bar / wing side.
-            img, mm = vert(f, x0 + 0.68 * (x1 - x0), zoom=1.12, cy=y0 + 0.45 * (y1 - y0), m=m)
-        # Whip into 13.22: directional blur + slide over 5 frames either side of the cut.
-        d = (t - 13.22) * FPS
-        if -5 <= d <= 5:
-            k = 1 - abs(d) / 5.5
-            img = camera(img, dx=-np.sign(d or 1) * 260 * k)
-            ks = int(90 * k) | 1
-            img = cv2.blur(img, (ks, 1))
-        if 14.55 <= t < 15.6:
-            e = hit_env(t, 2.8)
-            lit, al = neon_layer(img.astype(np.uint8), mm, BLUE, intensity=0.3 + 1.1 * e)
-            a = al[..., None] * min(1.0, 0.35 + e)
+        if t >= 13.22:
+            w = math.exp(-(t - 13.22) * 7)
+            lit, al = neon_layer(img.astype(np.uint8), mm, BLUE, intensity=1.3)
+            a = al[..., None] * min(1.0, w * 1.5)
             img = lit * a + img * (1 - a)
-            p = (t - 14.6) / 0.9
-            if 0 <= p <= 1:
-                img = trace_light(img, mm, p, np.array([255, 255, 255], np.float32), 1 - max(0, (p - 0.8) / 0.2))
+            img = img + (255 - img) * w * 0.75
+        if t >= 13.45:
+            img *= max(0.0, 1 - (t - 13.45) / 0.15)
         if t < 10.82:  # come out of the sun-burn white
             img = img + (255 - img) * (1 - (t - 10.70) / 0.12)
-        out.write(punch(img, t, strength=0.05, shake_px=6))
-
-
-def s6(out, t0, n):
-    """Reverse of the front shot, car lit in neon on the hits over a darkened background."""
-    frames = c2(0.787, n)[::-1]
-    for i, f in enumerate(frames):
-        t = t0 + i / FPS
-        ct = 0.787 + (n - 1 - i) / FPS
-        m = mask('c2', ct, (W, H))
-        k = hit_env(t, 2.5)
-        lit, al = neon_layer(f, m, BLUE, intensity=0.45 + 1.0 * k)
-        bg = f.astype(np.float32) * (0.85 - 0.35 * min(1.0, k * 2))
-        a = al[..., None]
-        out.write(punch(lit * a + bg * (1 - a), t, strength=0.06, shake_px=7))
-
-
-def s7(out, t0, n):
-    """Outro: full-screen rear 3/4 with a slow push, light lap on 19.89, white hit on 21.37, cut to black."""
-    frames = c1(11.2, n)
-    for i, f in enumerate(frames):
-        t = t0 + i / FPS
-        ct = 11.2 + i / FPS
-        m = mask('c1', ct, (1920, 1080))
-        push = 1.0 + 0.06 * (i / n)
-        img, mm = vert(f, car_cx(ct, 0.05), zoom=push, m=m)
-        p = (t - 19.89) / 1.0
-        if 0 <= p <= 1:
-            img = trace_light(img, mm, p, np.array([255, 255, 255], np.float32), 1 - max(0, (p - 0.8) / 0.2))
-        if t >= 21.37:
-            w = math.exp(-(t - 21.37) * 9)
-            lit, al = neon_layer(img.astype(np.uint8), mm, BLUE, intensity=1.2)
-            a = al[..., None] * w
-            img = lit * a + img * (1 - a)
-            img = img + (255 - img) * w * 0.7
-        if t >= 21.72:
-            img *= max(0.0, 1 - (t - 21.72) / 0.12)
         out.write(punch(img, t, strength=0.05, shake_px=6))
 
 
