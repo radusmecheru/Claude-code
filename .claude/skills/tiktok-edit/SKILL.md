@@ -53,6 +53,31 @@ python3 tools/carfx.py beats music.mp3 > work/beats.json   # then: shake --beats
 - Cut clips to the beat: get `beats.json`, then trim each clip so cuts land on `strong` beats.
 - Join with `ffmpeg -f concat` after re-encoding every piece to the same fps (30 or 60).
 
+### Full edits to music (the way edit #1 was built)
+
+For a real edit, do not chain CLI calls - write a per-edit script like
+`edits/porsche-gt3-01/edit.py` (one function per segment, song-time envelopes, lossless intermediates,
+one final encode). Team: `footage-scout` + `beat-mapper` (+ `reference-analyst` for links) in parallel →
+`edit-director` plan → `vfx-compositor` render → `qa-reviewer` before sending.
+
+Extra techniques used there:
+- **Letterbox hook**: landscape clip as a 1080x608 band on black, opening from a thin light line; calm push-in.
+  Hard switch to full-screen vertical on the drop gives a big impact for free.
+- **Triple stack**: three 1080x608 bands (y = 0 / 656 / 1312): full frame in the middle, 1:1-pixel detail
+  crops (wheel, wing, tail-light) above and below, positioned from the car's mask bounding box; bands slide in
+  and swap on hits.
+- **Sun burn**: zoom into the brightest point of the frame while blending to white; cut on the hit.
+- **Frame break**: letterbox band, with the car (mask) drawn on top of the black bars so it pokes out of the band.
+- **Reverse + neon**: reuse a shot reversed, car neon-lit on hits over a darkened background.
+
+Quality rules (the user hates blur and lag):
+- Keep 60 fps sources at 60 fps (`fps=60` on decode; phones record VFR). No slow-mo from 60 fps sources.
+- Never upscale landscape footage to fill 9:16. Use bands, 1:1 crops or downscaled cut-outs.
+- Downscale with `INTER_AREA`; punch-ins at most 8 % and decaying.
+- Intermediates lossless (`libx264rgb -qp 0`); final x264 `-preset slow -crf 14 -profile:v high`, bt709 tags,
+  light `unsharp`, AAC 320k.
+- iPhone clips may be shot sideways: check a frame, fix with `transpose=1|2`.
+
 ## Style B - Claude-made motion-graphics promo (ref: @rikibosso "Claude has cooked 😳")
 
 What the reference does (21-23 s): a brand promo generated with Claude, played in DaVinci

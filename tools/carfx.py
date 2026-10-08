@@ -198,34 +198,48 @@ def cmd_popout(a):
 
 # ---------- light trace around contour ----------
 
+def trace_light(frame, mask, p, color, fade=1.0, length=0.25, loops=1.0):
+    """Add a light streak whose head is at progress p (0..1) along the subject's outer contour."""
+    frame = frame.astype(np.float32)
+    cs, _ = cv2.findContours((mask > 0.5).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not cs or fade <= 0:
+        return frame
+    c = max(cs, key=cv2.contourArea)[:, 0, :]
+    n = len(c)
+    head = ease_in_out(p) * n * loops
+    idx = np.arange(int(head - n * length), int(head)) % n
+    canvas = np.zeros(mask.shape[:2], np.float32)
+    if len(idx) > 1:
+        pts = c[idx]
+        # Taper: thin and faint at the tail, bright at the head.
+        seg = max(1, len(pts) // 12)
+        for k in range(0, len(pts) - 1, seg):
+            t = k / len(pts)
+            cv2.polylines(canvas, [pts[k:k + seg + 1].reshape(-1, 1, 2)], False, 0.3 + 0.7 * t,
+                          thickness=max(2, int(3 + 7 * t)), lineType=cv2.LINE_AA)
+    glow = canvas + cv2.GaussianBlur(canvas, (0, 0), 6) * 2.5 + cv2.GaussianBlur(canvas, (0, 0), 20) * 3
+    return frame + (glow[..., None] * color * 0.9 + canvas[..., None] * 255) * fade
+
+
+def camera(img, zoom=1.0, dx=0.0, dy=0.0, angle=0.0, center=None):
+    """Zoom / shift / rotate a frame around `center` (default: frame centre), edges reflected."""
+    h, w = img.shape[:2]
+    cx, cy = center if center is not None else (w / 2, h / 2)
+    M = cv2.getRotationMatrix2D((cx, cy), angle, zoom)
+    M[:, 2] += (dx, dy)
+    return cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_REFLECT)
+
+
 def cmd_trace(a):
     _, _, fps, _ = probe(a.input)
     color = hex_bgr(a.color)
     out = Writer(a.output, fps, audio=a.input if a.keep_audio else None)
     total = a.frames
     for i, (f, m) in enumerate(zip(read_frames(a.input), load_mask_frames(a.mask))):
-        frame = f.astype(np.float32)
         if i < total:
-            cs, _ = cv2.findContours((m > 0.5).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            if cs:
-                c = max(cs, key=cv2.contourArea)[:, 0, :]
-                n = len(c)
-                head = ease_in_out(i / total) * n * a.loops
-                tail = head - n * a.length
-                idx = np.arange(int(tail), int(head)) % n
-                canvas = np.zeros((H, W), np.float32)
-                if len(idx) > 1:
-                    pts = c[idx]
-                    # Taper: thin and faint at the tail, bright at the head.
-                    seg = max(1, len(pts) // 12)
-                    for k in range(0, len(pts) - 1, seg):
-                        t = k / len(pts)
-                        cv2.polylines(canvas, [pts[k:k + seg + 1].reshape(-1, 1, 2)], False, 0.3 + 0.7 * t,
-                                      thickness=max(2, int(3 + 7 * t)), lineType=cv2.LINE_AA)
-                fade = 1 - max(0, (i - total * 0.8) / (total * 0.2))
-                glow = canvas + cv2.GaussianBlur(canvas, (0, 0), 6) * 2.5 + cv2.GaussianBlur(canvas, (0, 0), 20) * 3
-                frame = frame + (glow[..., None] * color * 0.9 + canvas[..., None] * 255) * fade
-        out.write(np.clip(frame, 0, 255))
+            fade = 1 - max(0, (i - total * 0.8) / (total * 0.2))
+            f = trace_light(f, m, i / total, color, fade, a.length, a.loops)
+        out.write(np.clip(f, 0, 255))
     out.close()
 
 
