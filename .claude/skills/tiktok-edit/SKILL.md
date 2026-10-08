@@ -81,7 +81,13 @@ Quality rules (the user hates blur and lag):
 - Downscale with `INTER_AREA`; punch-ins at most 8 % and decaying.
 - Intermediates lossless (`libx264rgb -qp 0`); final x264 `-preset slow -crf 14 -profile:v high`, bt709 tags,
   light `unsharp`, AAC 320k.
-- iPhone clips may be shot sideways: check a frame, fix with `transpose=1|2`.
+- iPhone clips may be shot sideways: check a frame, fix with `transpose=1|2`. ffprobe width/height ignore
+  the rotation side data - judge orientation from a decoded frame (scale with `-2`, never a fixed WxH).
+- 30 fps footage in a 60 fps edit: interpolate with RIFE (`tools/interp.py in30.mkv out60.mkv`, ~6 s per
+  1080x1920 frame on CPU). Prep only the ranges you use, downscaled to 1080x1920 first
+  with `tools/prep60.sh SRC START DUR out.mkv`. Never just duplicate frames.
+- 4K vertical sources: downscale to 1080x1920 (INTER_AREA) - sharpest material; prefer it for hero shots.
+- Shared plumbing for new edits: `tools/editkit.py` (read, Writer, Masks, hit_env, punch, run/finalize).
 
 ## Style B - Claude-made motion-graphics promo (ref: @rikibosso "Claude has cooked 😳")
 

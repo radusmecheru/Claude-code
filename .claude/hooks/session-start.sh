@@ -29,3 +29,8 @@ pip install -q torch --index-url https://download.pytorch.org/whl/cpu 2>&1 | gre
 mkdir -p ~/.cache/sr
 [ -f ~/.cache/sr/realesr-general-x4v3.pth ] || curl -sSfL -o ~/.cache/sr/realesr-general-x4v3.pth \
   https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth || true
+
+# RIFE 4.26 weights for tools/interp.py (30 -> 60 fps frame interpolation).
+mkdir -p ~/.cache/rife426
+[ -f ~/.cache/rife426/flownet.pkl ] || curl -sSfL -o ~/.cache/rife426/flownet.pkl \
+  https://huggingface.co/MonsterMMORPG/RIFE_4_26/resolve/main/train_log/flownet.pkl || true
