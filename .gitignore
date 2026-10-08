@@ -1,0 +1,6 @@
+node_modules/
+out/
+*.mp4
+!examples/*.mp4
+__pycache__/
+work/

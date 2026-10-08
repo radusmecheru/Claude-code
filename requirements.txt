@@ -1,0 +1,6 @@
+faster-whisper
+rembg[cpu]
+opencv-python-headless
+librosa
+yt-dlp[default,curl-cffi]
+fonttools
