@@ -88,6 +88,13 @@ Quality rules (the user hates blur and lag):
   with `tools/prep60.sh SRC START DUR out.mkv`. Never just duplicate frames.
 - 4K vertical sources: downscale to 1080x1920 (INTER_AREA) - sharpest material; prefer it for hero shots.
 - Shared plumbing for new edits: `tools/editkit.py` (read, Writer, Masks, hit_env, punch, run/finalize).
+- Shot-list edits with variants: `edits/porsche-gt3-03/edit.py` - each variant is a list of
+  (song start, end, source, in-point, fx, engine gain, duck). `--check` validates that shots tile the song
+  and fit their sources (no frozen frames). Use it as the template for multi-variant requests.
+- Engine sound: pass `extra_audio` to `editkit.run` (clip audio placed under its shot, song ducked to 50 %
+  on fly-bys). The user wants engines audible when the car passes.
+- Keep the car fully in frame: build edits from vertical sources; never crop landscape footage so the car
+  is cut off.
 
 ## Style B - Claude-made motion-graphics promo (ref: @rikibosso "Claude has cooked 😳")
 

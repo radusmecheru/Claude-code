@@ -105,14 +105,16 @@ def punch(img, t, hits, strength=0.06, shake_px=7, decay=10.0):
     return camera(img, zoom=1 + strength * k, dx=dx, dy=dy, angle=rng.normal(0, 0.5 * k))
 
 
-def run(workdir, segments, fns, song, end, out_name, only=None, final=True, target_mb=None, grade=GRADE):
+def run(workdir, segments, fns, song, end, out_name, only=None, final=True, target_mb=None, grade=GRADE,
+        extra_audio=()):
+    """fns[name] must be picklable (a top-level function or functools.partial of one)."""
     names = only or list(segments)
     with ProcessPoolExecutor(max_workers=4) as ex:
         futs = {n: ex.submit(_render, workdir, n, segments[n], fns[n]) for n in names}
         for n, f in futs.items():
             print(f'{n}: {f.result()} frames', file=sys.stderr)
     if final:
-        finalize(workdir, list(segments), song, end, out_name, target_mb, grade)
+        finalize(workdir, list(segments), song, end, out_name, target_mb, grade, extra_audio)
 
 
 def _render(workdir, name, span, fn):
@@ -124,14 +126,35 @@ def _render(workdir, name, span, fn):
     return n
 
 
-def finalize(workdir, names, song, end, out_name, target_mb=None, grade=GRADE):
-    lst = os.path.join(workdir, 'segments.txt')
+def audio_graph(extra, end, first_input=2):
+    """Song (input 1) ducked under clip sounds, plus each clip sound placed on the song timeline.
+    extra: [{'path', 'src_in', 'at', 'dur', 'gain', 'duck'}] -> (ffmpeg input args, filter_complex, out label)."""
+    args, chains, labels = [], [], []
+    ducks = [f"between(t,{e['at'] - 0.05:.3f},{e['at'] + e['dur']:.3f})" for e in extra if e.get('duck')]
+    vol = f"if({'+'.join(ducks)},0.5,1)" if ducks else '1'
+    chains.append(f"[1:a]aresample=48000,volume='{vol}':eval=frame[song]")
+    for i, e in enumerate(extra):
+        k = first_input + i
+        args += ['-i', e['path']]
+        ms = int(round(e['at'] * 1000))
+        chains.append(f"[{k}:a:0]atrim=start={e['src_in']:.3f}:duration={e['dur']:.3f},asetpts=PTS-STARTPTS,"
+                      f"aresample=48000,afade=t=in:d=0.04,afade=t=out:st={max(0.0, e['dur'] - 0.12):.3f}:d=0.12,"
+                      f"volume={e['gain']},adelay={ms}|{ms}[e{i}]")
+        labels.append(f'[e{i}]')
+    chains.append(f"[song]{''.join(labels)}amix=inputs={1 + len(labels)}:normalize=0:dropout_transition=0,"
+                  f"alimiter=limit=0.95,afade=t=out:st={end - 0.25}:d=0.25[aout]")
+    return args, ';'.join(chains), '[aout]'
+
+
+def finalize(workdir, names, song, end, out_name, target_mb=None, grade=GRADE, extra_audio=()):
+    lst = os.path.join(workdir, f'{out_name}_segments.txt')
     with open(lst, 'w') as fh:
         fh.writelines(f"file '{n}.seg.mkv'\n" for n in names)
     common = ['-profile:v', 'high', '-level', '4.2', '-r', str(FPS), '-g', '120', '-color_primaries', 'bt709',
               '-color_trc', 'bt709', '-colorspace', 'bt709']
-    inputs = ['-f', 'concat', '-safe', '0', '-i', lst, '-i', song, '-vf', grade,
-              '-af', f'afade=t=out:st={end - 0.25}:d=0.25', '-map', '0:v', '-map', '1:a', '-t', str(end)]
+    a_args, a_graph, a_out = audio_graph(list(extra_audio), end)
+    inputs = ['-f', 'concat', '-safe', '0', '-i', lst, '-i', song, *a_args,
+              '-filter_complex', f'[0:v]{grade}[vout];{a_graph}', '-map', '[vout]', '-map', a_out, '-t', str(end)]
     master = os.path.join(workdir, f'{out_name}.mp4')
     subprocess.run(['ffmpeg', '-v', 'error', '-y', *inputs, '-c:v', 'libx264', '-preset', 'slow', '-crf', '14', *common,
                     '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-movflags', '+faststart', master], check=True)
