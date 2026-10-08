@@ -13,8 +13,9 @@ Rules:
   the sound ends.
 - Never reuse the same source range with the same treatment twice; reuse is fine if the look clearly differs
   (reversed, neon, crop, stack).
-- Sharpness: no source pixel scaled above 1:1 except punch-ins (<= 8 %, decaying within ~0.3 s) or under a flash.
-  Landscape footage goes into letterbox / stacked bands / 1:1 detail crops / cut-outs.
+- Every frame fills 9:16 - never letterbox, black bars or stacked bands (the user rejects them).
+- Sharpness: prefer vertical sources; landscape footage is cropped to a 9:16 window tracking the subject
+  (max ~2x upscale, Lanczos + unsharp). Punch-ins <= 8 %, decaying within ~0.3 s.
 - 60 fps output from 60 fps sources; never slow-motion a 60 fps clip into a 60 fps timeline (it judders) unless
   the source is 120/240 fps.
 

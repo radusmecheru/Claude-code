@@ -14,9 +14,9 @@ For every clip you are given:
    by reading one transposed frame.
 4. Describe each usable range with start/end seconds: subject, camera move (push-in, orbit, tilt, whip, static),
    light (sunset flare, shade), and anything that ruins a range (people, shake, focus hunting, lens flare on the car).
-5. Say how it fits a 1080x1920 frame **without upscaling**: native vertical = full screen; landscape 1920x1080 =
-   letterbox band, stacked bands, 1:1 detail crops (1080x608 windows), or downscaled cut-outs. Never propose
-   cropping landscape to full 9:16 (that is a 1.78x upscale and looks blurry).
+5. Say how it fits a full 1080x1920 frame (no black bars ever): native vertical = full screen at 1:1;
+   landscape 1920x1080 = 9:16 window tracking the subject (1.78x upscale - note where the subject stays inside
+   a 608 px wide window) or downscaled cut-outs over vertical shots. Flag 4K landscape as fine (1:1 crop).
 6. Note natural transitions inside the footage: whip pans, the camera passing a tree/pole (wipe), the sun (portal).
 
 Return a compact markdown table per clip plus a bullet list of the 5 strongest moments with timestamps.

@@ -7,8 +7,9 @@ c2.mov (vertical), song.wav, c1_mask.npy (c1 6.0-14.2 s), c2_mask.npy (c2 0-3.6 
   python3 edits/porsche-gt3-01/edit.py work/ed1            # render every segment + final
   python3 edits/porsche-gt3-01/edit.py work/ed1 --seg s3   # re-render one segment, then final
 
-Rule for sharpness: footage is never scaled above 1:1 except during the punch-ins
-(<= 8 %, a few frames) and inside the white flash of the sun transition.
+v2: every frame fills 9:16 (no letterbox / bands - the user rejected bars). The landscape clip is
+cropped to a 9:16 window that follows the car and upscaled 1.78x with Lanczos + unsharp
+(AI upscaling was tested: crisper edges but plastic texture and ~10 s/frame).
 """
 import argparse
 import math
@@ -21,7 +22,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'tools'))
-from carfx import camera, ease, ease_in_out, hex_bgr, neon_layer, trace_light  # noqa: E402
+from carfx import camera, ease, hex_bgr, neon_layer, trace_light  # noqa: E402
 
 FPS = 60
 W, H = 1080, 1920
@@ -33,7 +34,9 @@ SEGMENTS = {  # name: (start, end) in song time
     's1': (0.0, 5.383), 's2': (5.383, 7.883), 's3': (7.883, 9.217), 's4': (9.217, 10.70),
     's5': (10.70, 16.05), 's6': (16.05, 18.66), 's7': (18.66, END),
 }
-C1_MASK_T0, C2_MASK_T0 = 6.0, 0.0
+C1_MASK_T0, C2_MASK_T0 = 3.0, 0.0
+MASK_FILES = {'c1': 'c1_mask_full.npy', 'c2': 'c2_mask.npy'}
+OUT_NAME = 'porsche_gt3_edit02'
 
 D = None  # work dir, set in main
 
@@ -69,7 +72,7 @@ _masks = {}
 def mask(clip, t, size):
     """Float mask 0..1 for clip time t, resized to `size` (w, h)."""
     if clip not in _masks:
-        _masks[clip] = np.load(os.path.join(D, f'{clip}_mask.npy'), mmap_mode='r')
+        _masks[clip] = np.load(os.path.join(D, MASK_FILES[clip]), mmap_mode='r')
     arr = _masks[clip]
     t0 = C1_MASK_T0 if clip == 'c1' else C2_MASK_T0
     i = min(max(fr(t - t0), 0), len(arr) - 1)
@@ -93,7 +96,7 @@ _bbox = {}
 def car_box(clip, t):
     """Smoothed subject bounding box (x0, y0, x1, y1) in full-res pixels of the clip."""
     if clip not in _bbox:
-        arr = np.load(os.path.join(D, f'{clip}_mask.npy'), mmap_mode='r')
+        arr = np.load(os.path.join(D, MASK_FILES[clip]), mmap_mode='r')
         boxes = []
         for m in arr:
             ys, xs = np.nonzero(m > 127)
@@ -126,34 +129,29 @@ def punch(img, t, strength=0.06, shake_px=7, decay=10.0, seed=0):
     return camera(img, zoom=1 + strength * k, dx=dx, dy=dy, angle=rng.normal(0, 0.5 * k))
 
 
-def fit_width(img, width=W, scale=1.0):
-    h, w = img.shape[:2]
-    s = width / w * scale
-    return cv2.resize(img, (int(round(w * s)), int(round(h * s))), interpolation=cv2.INTER_AREA)
+def vert(frame, cx, zoom=1.0, cy=540.0, m=None):
+    """9:16 window of a landscape frame centred on (cx, cy), upscaled to 1080x1920 (Lanczos + unsharp).
+    zoom > 1 tightens the window. Returns (image float32, mask or None)."""
+    cw, ch = 608 / zoom, 1080 / zoom
+    x = min(max(cx - cw / 2, 0), frame.shape[1] - cw)
+    y = min(max(cy - ch / 2, 0), frame.shape[0] - ch)
+    # Sub-pixel window via an affine warp keeps slow pans smooth (no 1 px stepping).
+    sx, sy = W / cw, H / ch
+    M = np.float32([[sx, 0, -x * sx], [0, sy, -y * sy]])
+    img = cv2.warpAffine(frame, M, (W, H), flags=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_REFLECT).astype(np.float32)
+    blur = cv2.GaussianBlur(img, (0, 0), 1.3)
+    img = np.clip(img * 1.55 - blur * 0.55, 0, 255)
+    mm = cv2.warpAffine(m, M, (W, H), flags=cv2.INTER_LINEAR) if m is not None else None
+    return img, mm
 
 
-def band(canvas, img, y, h, x_off=0):
-    """Paste a landscape frame as a horizontal band (centre-cropped to height h) at row y."""
-    ih = img.shape[0]
-    top = max(0, (ih - h) // 2)
-    piece = img[top:top + h, :W]
-    x0 = int(x_off)
-    xs, xe = max(0, x0), min(W, x0 + piece.shape[1])
-    if xe > xs:
-        canvas[y:y + piece.shape[0], xs:xe] = piece[:, xs - x0:xe - x0]
-    return canvas
+_cx = {}
 
 
-def detail_crop(frame, clip, t, fx, fy, size=(1080, 608), zoom=1.0):
-    """1:1-pixel crop around a point given relative to the car's bounding box."""
-    x0, y0, x1, y1 = car_box(clip, t)
-    cw, ch = int(size[0] * zoom), int(size[1] * zoom)
-    cx = int(x0 + (x1 - x0) * fx - cw / 2)
-    cy = int(y0 + (y1 - y0) * fy - ch / 2)
-    fh, fw = frame.shape[:2]
-    cx, cy = min(max(cx, 0), fw - cw), min(max(cy, 0), fh - ch)
-    crop = frame[cy:cy + ch, cx:cx + cw]
-    return cv2.resize(crop, size, interpolation=cv2.INTER_AREA) if zoom != 1.0 else crop
+def car_cx(t, lead=0.0):
+    """Smoothed horizontal centre of the car in c1 (full-res px), for the 9:16 window."""
+    x0, _, x1, _ = car_box('c1', t)
+    return (x0 + x1) / 2 + lead * (x1 - x0)
 
 
 class Writer:
@@ -174,28 +172,15 @@ class Writer:
 # ---------------- segments ----------------
 
 def s1(out, t0, n):
-    """Hook: cinematic letterbox, calm walk-up to the car while the news voice plays."""
+    """Hook: calm full-screen walk-up to the car under the news voice; slow push-in, fade from black."""
     frames = c1(3.2, n)
     for i, f in enumerate(frames):
         t = i / FPS
-        canvas = np.zeros((H, W, 3), np.float32)
-        open_p = ease(t / 0.9)
-        bh = max(2, int(810 * open_p))
-        push = 1.0 + 0.05 * (t / (n / FPS)) ** 1.5
-        img = fit_width(f, width=1440, scale=push).astype(np.float32)
-        y = (H - bh) // 2
-        # Keep the push centred: crop the wider frame back to 1080.
-        xo = (img.shape[1] - W) // 2
-        band(canvas, img[:, xo:xo + W], y, bh)
-        # A thin light line on the band edges while it opens.
-        glow = max(0.0, 1 - t / 1.2)
-        if glow > 0:
-            line = np.zeros((H, W), np.float32)
-            line[max(0, y - 1):y + 1, :] = 1
-            line[y + bh - 1:y + bh + 1, :] = 1
-            g = cv2.GaussianBlur(line, (0, 0), 6) * 2 + line
-            canvas += g[..., None] * np.array([255, 235, 215], np.float32) * glow * 0.8
-        out.write(canvas)
+        ct = 3.2 + t
+        push = 1.0 + 0.07 * (t / (n / FPS)) ** 1.6
+        img, _ = vert(f, car_cx(ct), zoom=push)
+        img *= min(1.0, t / 0.35)
+        out.write(img)
 
 
 def s2(out, t0, n):
@@ -260,40 +245,41 @@ def s4(out, t0, n):
         out.write(punch(img, t, strength=0.04, shake_px=5))
 
 
-STACK_Y = (0, 656, 1312)
-STACK_H = 608
-
-
 def s5(out, t0, n):
-    """Triple stack of the landscape orbit: full frame in the middle, 1:1 detail crops above/below."""
+    """Orbit around the rear, full-screen: wheel/side framing on 11.9, whip + tail-light framing on 13.22,
+    neon flash + light lap on 14.55."""
     frames = c1(8.6, n)
-    looks = [  # (from song time, top crop, bottom crop) - crops relative to the car's box
-        (0.0, (0.30, 0.80), (0.70, 0.12)),    # wheel / wing
-        (13.22, (0.62, 0.50), (0.25, 0.30)),  # tail-light bar / roof + mirror
-        (14.55, (0.70, 0.12), (0.30, 0.80)),  # wing / wheel (swapped)
-    ]
     for i, f in enumerate(frames):
         t = t0 + i / FPS
         ct = 8.6 + i / FPS
-        canvas = np.zeros((H, W, 3), np.float32)
-        mid = fit_width(f).astype(np.float32)
-        if 14.55 <= t < 15.4:  # neon flash on the middle band
-            m = mask('c1', ct, (mid.shape[1], mid.shape[0]))
-            lit, al = neon_layer(mid.astype(np.uint8), m, BLUE, intensity=1.3 * hit_env(t, 3) + 0.2)
-            al = al[..., None] * min(1.0, hit_env(t, 3) * 1.5)
-            mid = lit * al + mid * (1 - al)
-        band(canvas, mid, STACK_Y[1], STACK_H)
-        _, top_c, bot_c = [lk for lk in looks if lk[0] <= t][-1]
-        drift = 1.06 - 0.06 * ((t - 10.7) % 1.33) / 1.33  # slow push inside each crop, never above 1:1
-        if t >= 11.9:
-            p = ease((t - 11.9) / 0.22)
-            top = detail_crop(f, 'c1', ct, *top_c, zoom=drift).astype(np.float32)
-            bot = detail_crop(f, 'c1', ct, *bot_c, zoom=drift).astype(np.float32)
-            band(canvas, top, STACK_Y[0], STACK_H, x_off=-(1 - p) * W)
-            band(canvas, bot, STACK_Y[2], STACK_H, x_off=(1 - p) * W)
-        flash = 0.18 * hit_env(t, 12)
-        canvas = canvas + (255 - canvas) * flash * (canvas.sum(2, keepdims=True) > 0)
-        out.write(punch(canvas, t, strength=0.04, shake_px=5))
+        x0, y0, x1, y1 = car_box('c1', ct)
+        m = mask('c1', ct, (1920, 1080))
+        if t < 11.90:
+            img, mm = vert(f, car_cx(ct, 0.08), m=m)
+        elif t < 13.22:
+            # Reframe on the rear wheel and flank (no mirroring: it would flip the plate and lettering).
+            img, mm = vert(f, x0 + 0.30 * (x1 - x0), zoom=1.05, cy=y0 + 0.62 * (y1 - y0), m=m)
+        else:
+            # Tighter framing on the tail-light bar / wing side.
+            img, mm = vert(f, x0 + 0.68 * (x1 - x0), zoom=1.12, cy=y0 + 0.45 * (y1 - y0), m=m)
+        # Whip into 13.22: directional blur + slide over 5 frames either side of the cut.
+        d = (t - 13.22) * FPS
+        if -5 <= d <= 5:
+            k = 1 - abs(d) / 5.5
+            img = camera(img, dx=-np.sign(d or 1) * 260 * k)
+            ks = int(90 * k) | 1
+            img = cv2.blur(img, (ks, 1))
+        if 14.55 <= t < 15.6:
+            e = hit_env(t, 2.8)
+            lit, al = neon_layer(img.astype(np.uint8), mm, BLUE, intensity=0.3 + 1.1 * e)
+            a = al[..., None] * min(1.0, 0.35 + e)
+            img = lit * a + img * (1 - a)
+            p = (t - 14.6) / 0.9
+            if 0 <= p <= 1:
+                img = trace_light(img, mm, p, np.array([255, 255, 255], np.float32), 1 - max(0, (p - 0.8) / 0.2))
+        if t < 10.82:  # come out of the sun-burn white
+            img = img + (255 - img) * (1 - (t - 10.70) / 0.12)
+        out.write(punch(img, t, strength=0.05, shake_px=6))
 
 
 def s6(out, t0, n):
@@ -311,39 +297,26 @@ def s6(out, t0, n):
 
 
 def s7(out, t0, n):
-    """Outro: back to the letterbox, the car breaks out of the band; white hit, cut to black."""
+    """Outro: full-screen rear 3/4 with a slow push, light lap on 19.89, white hit on 21.37, cut to black."""
     frames = c1(11.2, n)
-    s = 0.75
-    band_h = 400
     for i, f in enumerate(frames):
         t = t0 + i / FPS
         ct = 11.2 + i / FPS
-        x0, y0, x1, y1 = car_box('c1', ct)
-        big = cv2.resize(f, (int(1920 * s), int(1080 * s)), interpolation=cv2.INTER_AREA).astype(np.float32)
-        m = cv2.resize(mask('c1', ct, (1920, 1080)), (big.shape[1], big.shape[0]))
-        # Centre the car horizontally; place the band so the roof and wing stick out above it.
-        cx = int((x0 + x1) / 2 * s - W / 2)
-        cx = min(max(cx, 0), big.shape[1] - W)
-        big, m = big[:, cx:cx + W], m[:, cx:cx + W]
-        car_top = y0 * s
-        band_top = min(int(car_top + 0.38 * (y1 - y0) * s), big.shape[0] - band_h)
-        y_screen = (H - band_h) // 2
-        canvas = np.zeros((H, W, 3), np.float32)
-        oy = y_screen - band_top  # offset from big-frame rows to screen rows
-        canvas[y_screen:y_screen + band_h] = big[band_top:band_top + band_h]
-        # Car pixels outside the band are drawn on top of the black bars.
-        full = np.zeros((H, W, 3), np.float32); fm = np.zeros((H, W), np.float32)
-        r0, r1 = max(0, oy), min(H, oy + big.shape[0])
-        full[r0:r1] = big[r0 - oy:r1 - oy]
-        fm[r0:r1] = m[r0 - oy:r1 - oy]
-        fm = fm[..., None]
-        canvas = full * fm + canvas * (1 - fm)
+        m = mask('c1', ct, (1920, 1080))
+        push = 1.0 + 0.06 * (i / n)
+        img, mm = vert(f, car_cx(ct, 0.05), zoom=push, m=m)
+        p = (t - 19.89) / 1.0
+        if 0 <= p <= 1:
+            img = trace_light(img, mm, p, np.array([255, 255, 255], np.float32), 1 - max(0, (p - 0.8) / 0.2))
         if t >= 21.37:
             w = math.exp(-(t - 21.37) * 9)
-            canvas = canvas + (255 - canvas) * w * 0.85
+            lit, al = neon_layer(img.astype(np.uint8), mm, BLUE, intensity=1.2)
+            a = al[..., None] * w
+            img = lit * a + img * (1 - a)
+            img = img + (255 - img) * w * 0.7
         if t >= 21.72:
-            canvas *= max(0.0, 1 - (t - 21.72) / 0.12)
-        out.write(punch(canvas, t, strength=0.05, shake_px=6))
+            img *= max(0.0, 1 - (t - 21.72) / 0.12)
+        out.write(punch(img, t, strength=0.05, shake_px=6))
 
 
 def render(name):
@@ -369,7 +342,7 @@ def finalize(target_mb=None):
               '-af', f'afade=t=out:st={END - 0.25}:d=0.25', '-map', '0:v', '-map', '1:a', '-t', str(END)]
     if target_mb:
         # Two-pass to a size cap (chat upload limit); ~10 Mbps at 22 s is still above what TikTok streams.
-        out = os.path.join(D, f'porsche_gt3_edit01_{target_mb}mb.mp4')
+        out = os.path.join(D, f'{OUT_NAME}_{target_mb:g}mb.mp4')
         kbps = int(target_mb * 8 * 1024 * 0.97 / END) - 192
         log = os.path.join(D, 'x264pass')
         for p in (1, 2):
@@ -379,7 +352,7 @@ def finalize(target_mb=None):
                             '-movflags', '+faststart', out if p == 2 else '-f', *([] if p == 2 else ['mp4', os.devnull])],
                            check=True)
     else:
-        out = os.path.join(D, 'porsche_gt3_edit01.mp4')
+        out = os.path.join(D, f'{OUT_NAME}.mp4')
         subprocess.run(['ffmpeg', '-v', 'error', '-y', *inputs, '-c:v', 'libx264', '-preset', 'slow', '-crf', '14', *common,
                         '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-movflags', '+faststart', out], check=True)
     print(out)

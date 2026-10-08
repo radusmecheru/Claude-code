@@ -60,19 +60,24 @@ For a real edit, do not chain CLI calls - write a per-edit script like
 one final encode). Team: `footage-scout` + `beat-mapper` (+ `reference-analyst` for links) in parallel →
 `edit-director` plan → `vfx-compositor` render → `qa-reviewer` before sending.
 
+**The user rejected letterbox / stacked bands: every frame must fill 9:16.** Landscape footage is
+cropped to a 9:16 window that follows the car (`vert()` + `car_cx()` in the edit script: centre from the
+mask bounding box, sub-pixel affine, Lanczos 1.78x + unsharp). Ask for vertical footage when possible.
+AI upscaling (`tools/upscale.py`, Real-ESRGAN compact) is available but ~10 s/frame on CPU and makes
+matte paint look plastic - use only for a few hero frames.
+
 Extra techniques used there:
-- **Letterbox hook**: landscape clip as a 1080x608 band on black, opening from a thin light line; calm push-in.
-  Hard switch to full-screen vertical on the drop gives a big impact for free.
-- **Triple stack**: three 1080x608 bands (y = 0 / 656 / 1312): full frame in the middle, 1:1-pixel detail
-  crops (wheel, wing, tail-light) above and below, positioned from the car's mask bounding box; bands slide in
-  and swap on hits.
 - **Sun burn**: zoom into the brightest point of the frame while blending to white; cut on the hit.
-- **Frame break**: letterbox band, with the car (mask) drawn on top of the black bars so it pokes out of the band.
+- **Reframe on a hit**: jump the 9:16 window to another part of the car (wheel, tail-light) on a bass hit.
+  Never mirror car footage: plates and badges read backwards.
+- **Whip cut**: +-5 frames of directional blur and slide around the cut.
 - **Reverse + neon**: reuse a shot reversed, car neon-lit on hits over a darkened background.
+- **Neon cut-out drop-in** over a different shot, and **light lap** (`trace_light`) on hits.
 
 Quality rules (the user hates blur and lag):
 - Keep 60 fps sources at 60 fps (`fps=60` on decode; phones record VFR). No slow-mo from 60 fps sources.
-- Never upscale landscape footage to fill 9:16. Use bands, 1:1 crops or downscaled cut-outs.
+- Landscape footage: crop to 9:16 following the subject (1.78x Lanczos + unsharp is the floor; never go
+  tighter than ~2x). Downscaled cut-outs over vertical shots stay perfectly sharp.
 - Downscale with `INTER_AREA`; punch-ins at most 8 % and decaying.
 - Intermediates lossless (`libx264rgb -qp 0`); final x264 `-preset slow -crf 14 -profile:v high`, bt709 tags,
   light `unsharp`, AAC 320k.
