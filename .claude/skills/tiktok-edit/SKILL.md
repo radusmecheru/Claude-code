@@ -104,8 +104,7 @@ Quality rules (the user hates blur and lag):
   (Laplacian var), optical-flow motion, luma, lights; drop ranges with motion > ~4 px/frame @180 w,
   sharpness < ~150 (ground / pocket shots) and handheld whips unless used as transitions. Compilations
   (like 07162.mp4) need their internal cuts listed so no shot crosses one.
-- Previously
-  the driver's face must never be visible. `python3 tools/privacy.py track clip.mkv clip_faces.json`
+- The driver's face must never be visible: `python3 tools/privacy.py track clip.mkv clip_faces.json`
   on every close shot, then `FaceTrack(...).hide(img, frame, car_mask)` (tint clipped to the car mask).
 - Static style: locked-off shots with the car approaching, and jump cuts on the beat within the same framing;
   zoom-only punch on hits (no shake).
