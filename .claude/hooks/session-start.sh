@@ -34,3 +34,8 @@ mkdir -p ~/.cache/sr
 mkdir -p ~/.cache/rife426
 [ -f ~/.cache/rife426/flownet.pkl ] || curl -sSfL -o ~/.cache/rife426/flownet.pkl \
   https://huggingface.co/MonsterMMORPG/RIFE_4_26/resolve/main/train_log/flownet.pkl || true
+
+# YuNet face detector for tools/privacy.py.
+mkdir -p ~/.cache/yunet
+[ -f ~/.cache/yunet/yunet.onnx ] || curl -sSfL -o ~/.cache/yunet/yunet.onnx \
+  https://huggingface.co/opencv/face_detection_yunet/resolve/main/face_detection_yunet_2023mar.onnx || true
