@@ -1,6 +1,6 @@
 ---
 name: tiktok-edit
-description: Edit vertical videos for TikTok / YouTube Shorts / Reels from footage the user uploads - car edits (neon outlines, floating cut-outs, light traces, wheel/vent portal transitions, speed ramps, beat shake), Claude-made motion-graphics promos (glow, 3D phone, UI cards, kinetic type) and trendy captions (word pop, karaoke, TikTok white text box with emoji). Use whenever the user sends a clip to edit, asks for subtitles/captions, zooms, effects, a promo/motion graphics video, or says "make it like this TikTok".
+description: Edit vertical videos for TikTok / YouTube Shorts / Reels from footage the user uploads - car edits (night ritual walkarounds, neon outlines, floating cut-outs, light traces, wheel/vent portal transitions, speed ramps, beat shake), Claude-made motion-graphics promos (glow, 3D phone, UI cards, kinetic type) and trendy captions (word pop, karaoke, TikTok white text box with emoji). Use whenever the user sends a clip to edit, asks for subtitles/captions, zooms, effects, a promo/motion graphics video, or says "make it like this TikTok".
 ---
 
 # TikTok / Shorts editing
@@ -99,6 +99,22 @@ Quality rules (the user hates blur and lag):
   on every close shot, then `FaceTrack(...).hide(img, frame, car_mask)` (tint clipped to the car mask).
 - Static style: locked-off shots with the car approaching, and jump cuts on the beat within the same framing;
   zoom-only punch on hits (no shake).
+
+## Style C - night ritual walkaround (ref: @rayden77777 "BMWs ritual")
+
+What the reference does (13.7 s, 1280x720 landscape, 30 fps, reggaeton at 112 BPM, no text): night under a
+gas-station canopy, matte black BMW M, one gimbal walkaround - ceiling lights -> tilt down to the car ->
+push in to the badge/grille -> headlights with the yellow DRLs blinking on the beat -> front lip -> wheel ->
+door open on the seats -> rear wheel -> tail-lights on -> plate. A cut or jump-cut on every beat (~0.5 s),
+exposure pumps on the beat (luma spikes), very low key (mean luma 15-20 %), crushed blacks, cool shadows,
+colour only in the lamps.
+
+Rebuild: `edits/ritual-demo/edit.py` (shot list + `fx`: jump = 0.2 s skip on each beat inside a shot,
+glow = lamps flare on beats, push, fadein/fadeout, detail:<x>). Look in `tools/looks.py`:
+`night_ritual(img, sky_mask=sky_mask(img))`, `lamp_glow(img, env)`, `grain`. Order shots as a walkaround
+(far -> front -> lights -> side/wheel -> rear -> tail-lights -> plate). Best with night footage where the
+lamps are on (DRLs, welcome animation, tail-lights); daylight footage graded dark works for mood but the
+headlights stay unlit. Keep the user's rules: 9:16 full frame, 60 fps, face hidden.
 
 ## Style B - Claude-made motion-graphics promo (ref: @rikibosso "Claude has cooked 😳")
 
