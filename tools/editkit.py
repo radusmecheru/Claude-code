@@ -52,11 +52,11 @@ def read(path, start, n, transpose=None, size=None):
 
 
 class Writer:
-    """Lossless RGB intermediate; the single lossy encode happens in finalize()."""
+    """Near-lossless RGB intermediate (x264rgb CRF 4, ~5x smaller than -qp 0); the real encode is finalize()."""
 
     def __init__(self, path):
         self.p = subprocess.Popen(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{W}x{H}',
-                                   '-r', str(FPS), '-i', '-', '-c:v', 'libx264rgb', '-qp', '0', '-preset', 'ultrafast',
+                                   '-r', str(FPS), '-i', '-', '-c:v', 'libx264rgb', '-crf', '4', '-preset', 'veryfast',
                                    path], stdin=subprocess.PIPE)
 
     def write(self, img):

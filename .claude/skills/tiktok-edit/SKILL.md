@@ -98,7 +98,14 @@ Quality rules (the user hates blur and lag):
   on fly-bys). The user wants engines audible when the car passes.
 - Keep the car fully in frame: build edits from vertical sources; never crop landscape footage so the car
   is cut off.
-- Privacy: the driver's face must never be visible. `python3 tools/privacy.py track clip.mkv clip_faces.json`
+- Privacy: YuNet fires on wheels, badges and flowers in night footage - always look at the detections
+  (crop + Read) before hiding anything; if nobody is in the car, do not apply it.
+- Footage triage before planning (see `edits/night-gt3/edit.py` docstring): per 0.25 s sharpness
+  (Laplacian var), optical-flow motion, luma, lights; drop ranges with motion > ~4 px/frame @180 w,
+  sharpness < ~150 (ground / pocket shots) and handheld whips unless used as transitions. Compilations
+  (like 07162.mp4) need their internal cuts listed so no shot crosses one.
+- Previously
+  the driver's face must never be visible. `python3 tools/privacy.py track clip.mkv clip_faces.json`
   on every close shot, then `FaceTrack(...).hide(img, frame, car_mask)` (tint clipped to the car mask).
 - Static style: locked-off shots with the car approaching, and jump cuts on the beat within the same framing;
   zoom-only punch on hits (no shake).

@@ -143,7 +143,7 @@ def main():
     rd = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', src, '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-'],
                           stdout=subprocess.PIPE)
     wr = subprocess.Popen(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{w}x{h}',
-                           '-r', f'{2 * num}/{den}', '-i', '-', '-c:v', 'libx264rgb', '-qp', '0', '-preset',
+                           '-r', f'{2 * num}/{den}', '-i', '-', '-c:v', 'libx264rgb', '-crf', '4', '-preset',
                            'ultrafast', dst], stdin=subprocess.PIPE)
     it = Interpolator()
     prev = None
