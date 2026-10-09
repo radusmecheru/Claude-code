@@ -70,3 +70,66 @@ def sky_mask(img):
     h = img.shape[0]
     m[int(h * 0.65):] = 0
     return cv2.GaussianBlur(m, (0, 0), 15)
+
+
+def clean_night(img):
+    """[r5 cupraedits] Clean night: deep blacks, contrast 1.1, slight desat, cool highlights, lamps untouched."""
+    x = img.astype(np.float32) / 255.0
+    lm = lamp_mask(img)[..., None]
+    gray = x.mean(axis=2, keepdims=True)
+    y = gray + (x - gray) * 0.95
+    y = np.clip((y - 0.5) * 1.1 + 0.5 - 0.015, 0, 1)
+    hi = np.clip((y.mean(axis=2, keepdims=True) - 0.59) / 0.41, 0, 1)
+    y = y + hi * np.array([0.04, 0.0, -0.03], np.float32)  # BGR: cooler highlights
+    y = y * (1 - lm) + x * lm
+    return np.clip(y, 0, 1) * 255.0
+
+
+def punchy(img):
+    """[r6 ti.cutz] Punchy garage look: crushed lows, contrast 1.15, saturation 1.3, warm highlights."""
+    x = img.astype(np.float32) / 255.0
+    gray = x.mean(axis=2, keepdims=True)
+    y = gray + (x - gray) * 1.3
+    y = np.clip((y - 0.5) * 1.15 + 0.5, 0, 1)
+    y = np.clip((y - 0.06) / 0.94, 0, 1)
+    hi = np.clip((y.mean(axis=2, keepdims=True) - 0.6) / 0.4, 0, 1)
+    y = y + hi * np.array([-0.02, 0.0, 0.03], np.float32)
+    return np.clip(y, 0, 1) * 255.0
+
+
+def warm_natural(img):
+    """[r7 m4jor3d] Natural overcast with crushed black paint and a slight warm cast."""
+    x = img.astype(np.float32) / 255.0
+    y = np.clip((x - 0.5) * 1.08 + 0.5, 0, 1)
+    y = np.clip((y - 0.02) / 0.98, 0, 1)
+    y = y + np.array([-0.015, 0.0, 0.02], np.float32) * (0.3 + 0.7 * y.mean(axis=2, keepdims=True))
+    return np.clip(y, 0, 1) * 255.0
+
+
+def daylight_fade(img):
+    """[r4 quentin.fx] Soft washed-out daylight: contrast 0.92, saturation 0.45, gamma 1.05, blacks lifted to
+    ~15/255, sky kept blue (saturation x1.6 inside the sky mask), slight softness."""
+    x = img.astype(np.float32) / 255.0
+    sm = sky_mask(img)[..., None]
+    gray = x.mean(axis=2, keepdims=True)
+    sat = 0.45 * (1 - sm) + 0.45 * 1.6 * sm
+    y = gray + (x - gray) * sat
+    y = np.clip((y - 0.5) * 0.92 + 0.5, 0, 1) ** (1 / 1.05)
+    y = 0.06 + y * 0.94 * (228 / 255)
+    soft = cv2.GaussianBlur(y, (0, 0), 1.2)
+    return np.clip(y * 0.7 + soft * 0.3, 0, 1) * 255.0
+
+
+def screen_insert(plate, render, corners, spill=0.1):
+    """[r1/r2] Put a motion render onto a filmed screen: corner-pin (TL, TR, BR, BL px) into `plate`,
+    x0.85 brightness, 3 px blur, plus a soft spill of the screen colour onto the plate (room light)."""
+    h, w = plate.shape[:2]
+    rh, rw = render.shape[:2]
+    src = np.float32([[0, 0], [rw, 0], [rw, rh], [0, rh]])
+    M = cv2.getPerspectiveTransform(src, np.float32(corners))
+    warped = cv2.warpPerspective(render.astype(np.float32) * 0.85, M, (w, h))
+    m = cv2.warpPerspective(np.ones((rh, rw), np.float32), M, (w, h))
+    warped = cv2.GaussianBlur(warped, (0, 0), 1.0)
+    mean = render.reshape(-1, 3).mean(0).astype(np.float32)
+    light = plate.astype(np.float32) * (0.25 + 0.75 * mean / 255.0) + cv2.GaussianBlur(m, (0, 0), 120)[..., None] * mean * spill
+    return np.clip(light * (1 - m[..., None]) + warped, 0, 255)

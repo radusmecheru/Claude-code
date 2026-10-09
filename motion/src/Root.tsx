@@ -1,5 +1,6 @@
 import {Composition} from 'remotion';
 import {GlowPromo, promoDuration, PromoProps} from './GlowPromo';
+import {MotionReel, reelBeatsUsed, reelDefaults} from './MotionReel';
 
 // Defaults are a neutral demo brand. Pass real values with --props='{"brand":"..."}'.
 const defaults: PromoProps = {
@@ -37,6 +38,24 @@ export const RemotionRoot: React.FC = () => {
 				width={1920}
 				height={1080}
 				defaultProps={defaults}
+			/>
+			<Composition
+				id="MotionReel"
+				component={MotionReel}
+				durationInFrames={Math.ceil((reelDefaults.beats[reelBeatsUsed] ?? 18) * 60)}
+				fps={60}
+				width={1920}
+				height={1080}
+				defaultProps={reelDefaults}
+			/>
+			<Composition
+				id="MotionReelVertical"
+				component={MotionReel}
+				durationInFrames={Math.ceil((reelDefaults.beats[reelBeatsUsed] ?? 18) * 60)}
+				fps={60}
+				width={1080}
+				height={1920}
+				defaultProps={reelDefaults}
 			/>
 		</>
 	);

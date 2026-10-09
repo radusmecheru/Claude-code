@@ -171,3 +171,64 @@ def finalize(workdir, names, song, end, out_name, target_mb=None, grade=GRADE, e
                             '-pass', str(p), '-passlogfile', log, *common, '-c:a', 'aac', '-b:a', '192k',
                             '-ar', '48000', '-movflags', '+faststart', *dst], check=True)
         print(out)
+
+
+def bass_returns(song, lo=150, gap_level=0.4, back_level=0.8, window=0.1):
+    """Times where the sub-bass (< lo Hz) comes back after a drop-out: energy rises from under gap_level x
+    median to over back_level x median within `window` s. Returns (gaps, returns) as lists of seconds."""
+    import librosa
+    y, sr = librosa.load(song, sr=22050, mono=True)
+    hop = 256
+    S = np.abs(librosa.stft(y, n_fft=2048, hop_length=hop))
+    f = librosa.fft_frequencies(sr=sr, n_fft=2048)
+    e = S[f < lo].mean(0)
+    med = np.median(e[e > 0]) if (e > 0).any() else 1.0
+    t = librosa.frames_to_time(np.arange(len(e)), sr=sr, hop_length=hop)
+    w = max(1, int(window * sr / hop))
+    gaps, rets = [], []
+    i = 0
+    while i < len(e) - w:
+        if e[i] < gap_level * med:
+            j = i
+            while j < len(e) and e[j] < gap_level * med:
+                j += 1
+            if j < len(e) and (j - i) * hop / sr > 0.15:
+                gaps.append(round(float(t[i]), 3))
+                if (e[j:j + w] > back_level * med).any():
+                    rets.append(round(float(t[j]), 3))
+            i = j + 1
+        else:
+            i += 1
+    return gaps, rets
+
+
+def match_inpoint(path, planned, dx_target, search=0.5, frames=4):
+    """In-point near `planned` (s) whose first `frames` frames move horizontally like dx_target
+    (mean Farneback dx, px/frame at 320 px wide): same sign, closest magnitude. Keeps slides continuous
+    across a cut (r7 style)."""
+    best, best_err = planned, 1e9
+    for k in range(-int(search * 10), int(search * 10) + 1):
+        t = max(0.0, planned + k / 10)
+        fr_ = read(path, t, frames + 1, size=(320, 568))
+        g = [cv2.cvtColor(x, cv2.COLOR_BGR2GRAY) for x in fr_]
+        dx = np.mean([cv2.calcOpticalFlowFarneback(g[i], g[i + 1], None, 0.5, 3, 15, 3, 5, 1.2, 0)[..., 0].mean()
+                      for i in range(frames)])
+        if np.sign(dx) != np.sign(dx_target):
+            continue
+        err = abs(dx - dx_target)
+        if err < best_err:
+            best, best_err = t, err
+    return best
+
+
+def shot_dx(path, t_end, frames=4):
+    """Mean horizontal motion (px/frame at 320 px wide) over the last `frames` frames before t_end."""
+    fr_ = read(path, max(0.0, t_end - (frames + 1) / FPS), frames + 1, size=(320, 568))
+    g = [cv2.cvtColor(x, cv2.COLOR_BGR2GRAY) for x in fr_]
+    return float(np.mean([cv2.calcOpticalFlowFarneback(g[i], g[i + 1], None, 0.5, 3, 15, 3, 5, 1.2, 0)[..., 0].mean()
+                          for i in range(frames)]))
+
+
+def early(times, frames=1):
+    """Shift cut times `frames` frames before the beat (r7 cuts land ~1 frame early - feels tighter)."""
+    return [round(t - frames / FPS, 4) for t in times]

@@ -116,6 +116,23 @@ glow = lamps flare on beats, push, fadein/fadeout, detail:<x>). Look in `tools/l
 lamps are on (DRLs, welcome animation, tail-lights); daylight footage graded dark works for mood but the
 headlights stay unlit. Keep the user's rules: 9:16 full frame, 60 fps, face hidden.
 
+## More styles (D-J)
+
+`styles.md` (next to this file) holds seven more reference breakdowns with rebuild recipes and filming lists:
+D screen-lit reel, E filmed-screen motion promo, F red night glitch-cut, G lyric portal, H light-bar wake-up ->
+blackout -> drop, I garage roll, J CGI autumn glide. Read it whenever the user names a style or sends a
+reference that resembles one.
+
+Tools added for them:
+- `tools/transitions.py`: zoom_blur, whip, roll, ellipse_portal, reverse_portal, cutout_grow, car_swap, morph,
+  arrive, fade, flash, flash_in, color_flash, blink, box_glitch, silhouette, sawtooth_wipe, bands_close.
+- `tools/looks.py`: night_ritual, lamp_glow, clean_night, punchy, warm_natural, daylight_fade, screen_insert, grain.
+- `tools/editkit.py`: bass_returns (bass drop-outs/returns), shot_dx + match_inpoint (motion-matched cuts),
+  early (cut N frames before the beat).
+- `tools/kinetic.py`: typed lyrics with accent word + glow, outline caps behind the car, curved text, end card.
+- `motion/src/MotionReel.tsx`: beat-driven reel (burst logo, easing curves, shape morph, tiles wipe, dot sphere,
+  prompt bar + pill switcher, word per beat, stroke-drawn logo); `MotionReel` 16:9 and `MotionReelVertical`.
+
 ## Style B - Claude-made motion-graphics promo (ref: @rikibosso "Claude has cooked 😳")
 
 What the reference does (21-23 s): a brand promo generated with Claude, played in DaVinci

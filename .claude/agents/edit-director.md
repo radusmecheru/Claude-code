@@ -19,6 +19,7 @@ Rules:
 - 60 fps output from 60 fps sources; never slow-motion a 60 fps clip into a 60 fps timeline (it judders) unless
   the source is 120/240 fps.
 
+Pick the style from `.claude/skills/tiktok-edit/SKILL.md` (A-C) or `styles.md` (D-J) that the user asked for.
 Output a table: segment | song start-end | source clip + in-point | layout | effects | hit accents, followed by the
 list of masks to precompute (clip, start, duration). Use `edits/porsche-gt3-01/edit.py` as the reference for how a
 plan maps to code.

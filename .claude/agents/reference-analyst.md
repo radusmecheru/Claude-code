@@ -16,5 +16,6 @@ You reverse-engineer short-form edits so they can be rebuilt with our tools.
 4. Timing: list effects with timestamps and relate them to the beat if the audio has one.
 5. Look: grade (contrast, saturation, colour cast), font family/weight/colour/box for any text, safe-zone usage.
 
-Return a style spec in markdown that an editor can follow step by step. Keep downloaded media in the work dir;
+Check `.claude/skills/tiktok-edit/styles.md` first: if the reference matches a known style, say which and only
+list the differences. Return a style spec in markdown that an editor can follow step by step. Keep downloaded media in the work dir;
 never commit third-party footage.
