@@ -88,6 +88,9 @@ Quality rules (the user hates blur and lag):
   with `tools/prep60.sh SRC START DUR out.mkv`. Never just duplicate frames.
 - 4K vertical sources: downscale to 1080x1920 (INTER_AREA) - sharpest material; prefer it for hero shots.
 - Shared plumbing for new edits: `tools/editkit.py` (read, Writer, Masks, hit_env, punch, run/finalize).
+- Disk: lossless `*.seg.mkv` intermediates are 100 MB-1 GB each and the session disk fills up (writes then
+  fail with BrokenPipe from the ffmpeg writer). After a version is delivered, delete its `*.seg.mkv` and
+  the uncapped master; keep the prepped sources (`A.mkv`...) and the `_29mb` deliveries. Check `df -h`.
 - Shot-list edits with variants: `edits/porsche-gt3-03/edit.py` - each variant is a list of
   (song start, end, source, in-point, fx, engine gain, duck). `--check` validates that shots tile the song
   and fit their sources (no frozen frames). Use it as the template for multi-variant requests.
