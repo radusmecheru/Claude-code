@@ -6,9 +6,12 @@ Romanian songs trending on Shazam Romania (13 Oct 2026). Songs are the official 
   v2  Ursaru & co - Gagica-ta        86 BPM   H: calm hook with V12 revs + flame pops, riser, drop at 4.32
   v3  Vescan & Bianca Mares -
       Absenta Ta                     92 BPM   glide: every 2 beats, RIFE slow motion on the flames
+  v4  "It's B-M-V, not BMW" remix    129 BPM  the @nukiinhollywood trend sound (TikTok): cuts on the words,
+                                              zoom punch on "wait, what?", slow-mo flames in the break, drop
 
-Audio is pre-mixed here (song window + the game sound with the voice-over removed by demucs + procedural
-SFX from tools/sfx.py: revs, exhaust pops, bangs, whooshes, impacts, riser), then encoded once by editkit.
+Audio is pre-mixed here: song window + REAL exhaust recordings (CC0, freesound.org: Lamborghini revs,
+supercar revs, V8 fly-bys, backfires - sliced into work/ed4/sfxlib) on the flame / hook / chase shots +
+procedural whoosh / impact / riser from tools/sfx.py. The game's own sound is not used (user's request).
 
   python3 edits/gta-m3/edit.py work/ed4 v1 [--target-mb 29] [--check]
 Work dir: src.mp4 (the clip), prep/s1_slow.mkv, s9_slow.mkv, s15_slow.mkv (2x slow motion of 0.45, 14.90,
@@ -36,8 +39,9 @@ SRC = {'m': ('src.mp4', 27.8), 's1': ('prep/s1_slow.mkv', 1.5), 's9': ('prep/s9_
 SLOW_ORIGIN = {'s1': 0.45, 's9': 14.90, 's15': 24.85}  # clip time of a slow clip's first frame
 CLIP_CUTS = [5.65, 7.217, 11.05, 11.8, 23.25, 24.8, 26.233]  # hard cuts inside the source clip
 
-SONG = {'v1': ('songs/full_option.wav', 0.0), 'v2': ('songs/gagica_ta.wav', 6.92), 'v3': ('songs/absenta_ta.wav', 0.0)}
-END = {'v1': 15.70, 'v2': 15.60, 'v3': 15.30}
+SONG = {'v1': ('songs/full_option.wav', 0.0), 'v2': ('songs/gagica_ta.wav', 6.92), 'v3': ('songs/absenta_ta.wav', 0.0),
+        'v4': ('songs/bmw.wav', 0.0)}
+END = {'v1': 15.70, 'v2': 15.60, 'v3': 15.30, 'v4': 12.70}
 
 # Song-time beats/hits converted to edit time (minus the window start).
 _FO_BASS = [1.47, 2.04, 2.62, 3.19, 3.78, 4.35, 4.93, 5.5, 6.1, 6.65, 7.24, 7.81, 8.39, 8.96, 9.54, 10.12, 10.7,
@@ -46,7 +50,9 @@ _GT_BEATS = [11.24, 11.94, 12.63, 13.33, 14.02, 14.72, 15.42, 16.11, 16.81, 17.5
              21.69, 22.41]
 _AT_BEATS = [0.07, 0.63, 1.28, 1.93, 2.58, 3.25, 3.88, 4.55, 5.18, 5.85, 6.5, 7.15, 7.8, 8.45, 9.1, 9.75, 10.4,
              11.08, 11.73, 12.38, 13.03, 13.68, 14.33, 14.98]
-HITS = {'v1': _FO_BASS, 'v2': [round(b - 6.92, 3) for b in _GT_BEATS], 'v3': _AT_BEATS}
+_BMW_DROP = [8.97, 9.42, 9.9, 10.36, 10.8, 11.26, 11.75, 12.18, 12.64]
+HITS = {'v1': _FO_BASS, 'v2': [round(b - 6.92, 3) for b in _GT_BEATS], 'v3': _AT_BEATS, 'v4': _BMW_DROP}
+WHAT = 5.14  # v4: "what?" - comedic zoom punch
 EARLY = {'v1': 1}
 
 # (start, end, src, in-point, fx). fx: fadein push pushfast zoomin zoomout whipin roll punchout jump
@@ -102,6 +108,21 @@ SHOTS = {
         (13.03, 14.33, 'm', 26.30, {'flames'}),
         (14.33, 15.30, 'm', 11.81, {'roll', 'final'}),
     ],
+    'v4': [
+        (0.00, 1.26, 'm', 16.60, {'fadein', 'push', 'rev'}),
+        (1.26, 2.12, 'm', 3.55, {'push'}),
+        (2.12, 2.88, 'm', 13.75, {'flyby'}),
+        (2.88, 3.88, 'm', 22.25, set()),
+        (3.88, 4.48, 'm', 23.30, {'push'}),
+        (4.48, 5.74, 'm', 5.75, {'what'}),
+        (5.74, 7.11, 'm', 11.81, {'roll', 'flyby'}),
+        (7.11, 8.36, 's1', 0.00, {'flames', 'slowsound', 'riser'}),
+        (8.36, 8.97, 'm', 4.80, {'whipin'}),
+        (8.97, 9.89, 'm', 8.65, {'flames', 'impact', 'flash'}),
+        (9.89, 10.82, 'm', 14.95, {'flames', 'zoomin'}),
+        (10.82, 11.73, 'm', 19.70, {'flames', 'whipin'}),
+        (11.73, 12.70, 'm', 26.25, {'flames', 'final'}),
+    ],
 }
 
 D = None
@@ -111,7 +132,7 @@ V = None
 def look(img):
     if V == 'v1':
         return 0.5 * img + 0.5 * looks.punchy(img)
-    if V == 'v2':
+    if V in ('v2', 'v4'):
         x = np.clip((img - 128.0) * 1.08 + 128.0 - 4, 0, 255)  # a touch more contrast, deeper blacks
         return x
     return 0.6 * img + 0.4 * looks.warm_natural(img)
@@ -192,6 +213,8 @@ def render(item, out, t0, n):
             last_angle = ang
         if 'zoomout' in fx and i >= n - 8:
             img = tr.zoom_blur(img, (i - (n - 8)) / 7, out=True)
+        if 'what' in fx and t >= WHAT:  # snap zoom on "what?"
+            img = camera(img, zoom=1.0 + 0.22 * min(1.0, (t - WHAT) / 0.05))
         if 'zoomin' in fx and i < 6:
             img = tr.zoom_blur(img, i / 5, out=False)
         if 'whipin' in fx and i < 5:
@@ -235,6 +258,30 @@ def place(mix, sig, at, gain=1.0):
         mix[s:e] += sig[:e - s] * gain
 
 
+LIB = None
+
+
+def lib(name):
+    global LIB
+    if LIB is None:
+        LIB = {}
+    if name not in LIB:
+        LIB[name] = load_wav(os.path.join(D, 'sfxlib', name + '.wav'))
+    return LIB[name]
+
+
+def slowed(x, factor=0.6):
+    """Play a sample slower (pitch drops too) - deep, heavy bangs for slow-motion shots."""
+    n = int(len(x) / factor)
+    idx = np.linspace(0, len(x) - 1, n)
+    return np.stack([np.interp(idx, np.arange(len(x)), x[:, c]) for c in range(2)], 1)
+
+
+BANGS = ['bang_a', 'bang_b', 'bang_c', 'bang_d', 'bang_e', 'bang_f']
+REVS = ['rev_lambo_a', 'rev_lambo_b', 'rev_lambo_c', 'rev_super_a', 'rev_super_b', 'rev_v8']
+FLYBYS = ['flyby_a', 'flyby_b', 'accel_a', 'vroom_a']
+
+
 def build_audio(v, path):
     import soundfile as sf
     end = END[v]
@@ -242,42 +289,56 @@ def build_audio(v, path):
     song_path, w0 = SONG[v]
     song = load_wav(os.path.join(D, song_path), w0, end)
     song = np.pad(song, ((0, max(0, n - len(song))), (0, 0)))[:n]
+    # Level the song (previews differ by ~6 dB) so the SFX sit at the same place in every edit.
+    loud = song[int(min(end - 1, 4.5) * sfx.SR):]
+    song = song * (10 ** (-13 / 20) / max(1e-6, float(np.sqrt(np.mean(loud ** 2)))))
     fx_bus = np.zeros((n, 2), np.float32)
-    game = load_wav(os.path.join(D, 'game.wav'))
     duck = np.ones(n, np.float32)
-    seed = {'v1': 10, 'v2': 20, 'v3': 30}[v]
+    seed = {'v1': 10, 'v2': 20, 'v3': 30, 'v4': 40}[v]
+    rng = np.random.default_rng(seed)
     for i, (s0, s1, (_, _, src, at, fx)) in enumerate(timeline(v)):
         dur = s1 - s0
-        # Real game exhaust under every real-time shot (voice-over removed), boosted.
-        if src == 'm':
-            a = int(at * sfx.SR)
-            g = game[a:a + int(dur * sfx.SR)]
-            g = g * np.minimum(1.0, np.arange(len(g))[:, None] / (0.02 * sfx.SR))
-            place(fx_bus, g, s0, 6.0)
         if 'flames' in fx:
-            place(fx_bus, sfx.pops(min(dur, 1.3), rate=16, seed=seed + i), s0 + 0.03, 0.55)
-            place(fx_bus, sfx.bang(seed=seed + i), s0, 0.5)
-            duck[int(s0 * sfx.SR):int(min(s1, s0 + 0.6) * sfx.SR)] = 0.8
+            # Real backfires: a burst of 2-4 bangs at the start of every flame shot.
+            k = int(rng.integers(2, 5))
+            times = s0 + np.cumsum(rng.uniform(0.09, 0.22, k)) - 0.06
+            for j, tb in enumerate(times):
+                if tb < s1:
+                    smp = lib(BANGS[int(rng.integers(len(BANGS)))])
+                    if 'slowsound' in fx or src != 'm':
+                        smp = slowed(smp, 0.6)
+                    place(fx_bus, smp, tb, 0.75 if j == 0 else 0.5)
+            if 'slowsound' in fx or src != 'm':
+                place(fx_bus, slowed(lib('bang_seq'), 0.7), s0, 0.45)
+            duck[int(s0 * sfx.SR):int(min(s1, s0 + 0.5) * sfx.SR)] = 0.7
         if 'rev' in fx:
-            r = sfx.rev(min(2.2, dur + 0.4), seed=seed + i)
-            place(fx_bus, r, max(0.0, s1 - len(r) / sfx.SR + 0.25), 0.55)
+            r = lib(REVS[i % len(REVS)])
+            place(fx_bus, r, max(0.0, s1 - len(r) / sfx.SR + 0.35), 0.75)
+            duck[int(s0 * sfx.SR):int(s1 * sfx.SR)] = np.minimum(duck[int(s0 * sfx.SR):int(s1 * sfx.SR)], 0.75)
+        if 'flyby' in fx:
+            place(fx_bus, lib(FLYBYS[i % len(FLYBYS)]), s0 - 0.1, 0.6)
         if 'riser' in fx:
             r = sfx.riser(min(2.0, dur))
             place(fx_bus, r, s1 - len(r) / sfx.SR, 0.45)
-        if 'impact' in fx or (i and s0 in HITS[v][:1]):
+            rv = lib('rev_lambo_c')
+            place(fx_bus, rv, s1 - len(rv) / sfx.SR + 0.2, 0.55)
+        if 'impact' in fx:
             place(fx_bus, sfx.impact(seed=seed + i), s0, 0.75)
+            place(fx_bus, lib('rev_super_a'), s0 + 0.05, 0.5)
         if fx & {'whipin', 'zoomin'}:
             w = sfx.whoosh(0.45, seed=seed + i, pan_from=-0.9 if i % 2 else 0.9, pan_to=0.9 if i % 2 else -0.9)
             place(fx_bus, w, s0 - 0.25, 0.5)
         if 'zoomout' in fx:
             place(fx_bus, sfx.whoosh(0.5, seed=seed + 50 + i), s1 - 0.3, 0.5)
+        if 'what' in fx:
+            place(fx_bus, sfx.impact(d=0.6, seed=seed + 77), WHAT, 0.4)
         if 'final' in fx:
             hit = max(HITS[v][-1], s0)
             place(fx_bus, sfx.impact(seed=seed + 99), hit, 0.85)
-            place(fx_bus, sfx.pops(0.9, rate=20, seed=seed + 98), hit + 0.05, 0.5)
+            place(fx_bus, lib('bang_seq'), hit + 0.05, 0.6)
     duck = np.convolve(duck, np.ones(2400) / 2400, mode='same')[:, None]
-    mix = song * 0.85 * duck + fx_bus
-    mix = np.tanh(mix * 1.1) / np.tanh(1.1)  # soft limiter
+    mix = song * duck + fx_bus * 0.6
+    mix = np.tanh(mix * 1.4) / 1.4  # soft limiter: bangs punch through without burying the song
     mix = mix / max(1e-6, np.max(np.abs(mix))) * 0.95
     sf.write(path, mix.astype(np.float32), sfx.SR)
     return path
