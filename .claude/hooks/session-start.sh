@@ -39,3 +39,16 @@ mkdir -p ~/.cache/rife426
 mkdir -p ~/.cache/yunet
 [ -f ~/.cache/yunet/yunet.onnx ] || curl -sSfL -o ~/.cache/yunet/yunet.onnx \
   https://huggingface.co/opencv/face_detection_yunet/resolve/main/face_detection_yunet_2023mar.onnx || true
+
+# Demucs htdemucs_ft (voice-over removal) from a Hugging Face mirror; files are checked against the
+# official sha256 prefixes in their names before use.
+pip install -q demucs soundfile 2>&1 | grep -v "Running pip as the 'root' user" || true
+mkdir -p ~/.cache/demucs_repo
+for f in 04573f0d-f3cf25b2.th 92cfc3b6-ef3bcb9c.th d12395a8-e57c48e6.th f7e0c4bc-ba3fe64a.th htdemucs_ft.yaml; do
+  [ -f ~/.cache/demucs_repo/$f ] || curl -sSfL -o ~/.cache/demucs_repo/$f \
+    "https://huggingface.co/dokodesuka/htdemucs_ft/resolve/main/$f" || true
+done
+for f in ~/.cache/demucs_repo/*.th; do
+  exp=$(basename "$f" .th | cut -d- -f2)
+  [ "$(sha256sum "$f" | cut -c1-8)" = "$exp" ] || rm -f "$f"
+done

@@ -125,6 +125,20 @@ glow = lamps flare on beats, push, fadein/fadeout, detail:<x>). Look in `tools/l
 lamps are on (DRLs, welcome animation, tail-lights); daylight footage graded dark works for mood but the
 headlights stay unlit. Keep the user's rules: 9:16 full frame, 60 fps, face hidden.
 
+## Songs, voice removal and sound design
+
+- Trending songs: Shazam's live chart CSV works (`curl https://www.shazam.com/services/charts/csv/top-200/romania`).
+  YouTube downloads are blocked here (bot check). Official 30 s previews (usually the hook/chorus) come from
+  the Deezer API (`https://api.deezer.com/search?q=...` -> `preview`), enough for a 15 s edit. A full-length
+  sound: ask the user for a TikTok link and extract its audio.
+- Voice-over on footage: `python3 -m demucs --repo ~/.cache/demucs_repo -n htdemucs_ft --two-stems vocals`
+  -> `no_vocals.wav` keeps the engine/game sound. It is often quiet; boost it and layer SFX.
+- `tools/sfx.py`: procedural whoosh, impact, riser, exhaust pops/crackle, bang, V12-style rev. Pre-mix the
+  whole soundtrack in the edit script (song window + game sound per shot + SFX on cuts/flames/drop, duck the
+  song under big hits, soft-limit) and pass the mix to `editkit.run` as the song (see `edits/gta-m3/edit.py`).
+- Slow motion without judder on 60 fps sources: RIFE 2x to 120 fps, then `setpts=2*PTS -r 60`
+  (`work/ed4/slowmo.sh` pattern).
+
 ## More styles (D-J)
 
 `styles.md` (next to this file) holds seven more reference breakdowns with rebuild recipes and filming lists:
